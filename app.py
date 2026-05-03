@@ -1,8 +1,13 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, session
 import anthropic
 import os
+from collections import defaultdict
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "bos-deliberations-secret-2026")
+
+FREE_LIMIT = 5
+usage_by_ip = defaultdict(int)
 
 SYSTEM_PROMPT = """Tu es un juriste expert en droit public des collectivités territoriales françaises, spécialisé dans la rédaction d'actes administratifs.
 
@@ -65,17 +70,46 @@ with open(os.path.join(os.path.dirname(__file__), "index.html"), encoding="utf-8
     HTML_TEMPLATE = f.read()
 
 
+def get_client_ip():
+    if request.headers.get("X-Forwarded-For"):
+        return request.headers.get("X-Forwarded-For").split(",")[0].strip()
+    return request.remote_addr
+
+
 @app.route("/")
 def index():
     return render_template_string(HTML_TEMPLATE)
 
 
+@app.route("/usage", methods=["GET"])
+def get_usage():
+    ip = get_client_ip()
+    used = usage_by_ip[ip]
+    server_key_available = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    remaining = max(0, FREE_LIMIT - used) if server_key_available else 0
+    return jsonify({
+        "remaining": remaining,
+        "server_key_available": server_key_available
+    })
+
+
 @app.route("/generate", methods=["POST"])
 def generate():
     data = request.json
-    api_key = data.get("api_key", "").strip()
+    user_api_key = data.get("api_key", "").strip()
+    ip = get_client_ip()
+    server_key = os.environ.get("ANTHROPIC_API_KEY", "")
 
-    if not api_key:
+    if user_api_key:
+        api_key = user_api_key
+    elif server_key:
+        if usage_by_ip[ip] >= FREE_LIMIT:
+            return jsonify({
+                "error": f"Vous avez utilisé vos {FREE_LIMIT} générations gratuites. Entrez votre propre clé API Anthropic pour continuer (gratuit sur console.anthropic.com)."
+            }), 429
+        api_key = server_key
+        usage_by_ip[ip] += 1
+    else:
         return jsonify({"error": "Clé API manquante. Entrez votre clé Anthropic."}), 400
 
     commune = data.get("commune", "")
@@ -107,7 +141,11 @@ Produis une délibération complète, formelle et juridiquement conforme, prête
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        return jsonify({"result": message.content[0].text})
+        remaining = max(0, FREE_LIMIT - usage_by_ip[ip]) if not user_api_key else None
+        return jsonify({
+            "result": message.content[0].text,
+            "remaining": remaining
+        })
 
     except anthropic.AuthenticationError:
         return jsonify({"error": "Clé API invalide. Vérifiez votre clé sur console.anthropic.com"}), 401
