@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Agent Délibérations IA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .deliberation-output {
+      white-space: pre-wrap;
+      font-family: 'Georgia', serif;
+      line-height: 1.8;
+    }
+    .spinner {
+      border: 3px solid #e5e7eb;
+      border-top: 3px solid #1e40af;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fade-in { animation: fadeIn 0.4s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-blue-900 rounded-lg flex items-center justify-center text-white text-sm font-bold">⚖</div>
+        <div>
+          <h1 class="text-base font-semibold text-slate-900">Agent Délibérations IA</h1>
+          <p class="text-xs text-slate-500">Génération automatique d'actes administratifs</p>
+        </div>
+      </div>
+      <span class="text-xs bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-medium border border-blue-100">Prototype v1</span>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+    <!-- Left — Form -->
+    <div>
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-5">Paramètres de la délibération</h2>
+
+        <!-- API Key -->
+        <div class="mb-5 p-4 bg-amber-50 rounded-xl border border-amber-200">
+          <label class="block text-xs font-semibold text-amber-800 mb-1.5">Clé API Anthropic</label>
+          <div class="relative">
+            <input id="apiKey" type="password" placeholder="sk-ant-..."
+              class="w-full text-sm border border-amber-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 pr-10"/>
+            <button onclick="toggleKey()" class="absolute right-3 top-2.5 text-amber-500 hover:text-amber-700 text-xs">
+              👁
+            </button>
+          </div>
+          <p class="text-xs text-amber-600 mt-1.5">
+            Obtenez une clé gratuite sur
+            <a href="https://console.anthropic.com" target="_blank" class="underline font-medium">console.anthropic.com</a>
+          </p>
+        </div>
+
+        <!-- Commune -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Nom de la collectivité *</label>
+          <input id="commune" type="text" placeholder="ex : Commune de Saint-Martin-lès-Metz"
+            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+        </div>
+
+        <!-- Type + Date -->
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Type de collectivité</label>
+            <select id="typeCollectivite"
+              class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white">
+              <optgroup label="Bloc communal">
+                <option>Commune</option>
+                <option>Communauté de communes</option>
+                <option>Communauté d'agglomération</option>
+                <option>Communauté urbaine</option>
+                <option>Métropole</option>
+                <option>Métropole de Lyon</option>
+              </optgroup>
+              <optgroup label="Syndicats">
+                <option>Syndicat intercommunal à vocation unique (SIVU)</option>
+                <option>Syndicat intercommunal à vocation multiple (SIVOM)</option>
+                <option>Syndicat mixte fermé</option>
+                <option>Syndicat mixte ouvert</option>
+              </optgroup>
+              <optgroup label="Collectivités territoriales">
+                <option>Département</option>
+                <option>Région</option>
+                <option>Collectivité territoriale unique</option>
+                <option>Collectivité d'outre-mer</option>
+              </optgroup>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Date de séance</label>
+            <input id="dateSeance" type="date"
+              class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+          </div>
+        </div>
+
+        <!-- Objet -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Objet de la délibération *</label>
+          <input id="objet" type="text" placeholder="ex : Approbation du budget primitif 2026"
+            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+        </div>
+
+        <!-- Contexte -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Contexte et détails</label>
+          <textarea id="contexte" rows="4"
+            placeholder="Décrivez le contexte, les enjeux, les éléments importants à mentionner dans la délibération..."
+            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none"></textarea>
+        </div>
+
+        <!-- Montant -->
+        <div class="mb-6">
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5">Montant / budget (optionnel)</label>
+          <input id="montant" type="text" placeholder="ex : 45 000 € TTC"
+            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+        </div>
+
+        <!-- Submit -->
+        <button onclick="generate()" id="generateBtn"
+          class="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-3 rounded-xl transition-all duration-150 flex items-center justify-center gap-2">
+          <span id="btnText">✦ Générer la délibération</span>
+          <span id="btnSpinner" class="hidden"><span class="spinner"></span></span>
+        </button>
+      </div>
+
+      <!-- Exemples rapides -->
+      <div class="mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Exemples rapides</p>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="fillExample('marche')" class="text-xs bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 px-3 py-1.5 rounded-lg transition-colors">Marché public</button>
+          <button onclick="fillExample('budget')" class="text-xs bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 px-3 py-1.5 rounded-lg transition-colors">Budget primitif</button>
+          <button onclick="fillExample('subvention')" class="text-xs bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 px-3 py-1.5 rounded-lg transition-colors">Subvention</button>
+          <button onclick="fillExample('convention')" class="text-xs bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 px-3 py-1.5 rounded-lg transition-colors">Convention</button>
+          <button onclick="fillExample('tarif')" class="text-xs bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 px-3 py-1.5 rounded-lg transition-colors">Tarifs municipaux</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right — Output -->
+    <div>
+      <div id="outputPlaceholder" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 h-full flex flex-col items-center justify-center text-center min-h-96">
+        <div class="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-3xl mb-4">📄</div>
+        <p class="text-slate-700 font-medium mb-2">La délibération apparaîtra ici</p>
+        <p class="text-slate-400 text-sm max-w-xs">Remplissez le formulaire et cliquez sur "Générer" pour obtenir un brouillon complet et juridiquement conforme.</p>
+      </div>
+
+      <div id="outputContainer" class="hidden fade-in">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-green-400"></span>
+              <span class="text-xs font-semibold text-slate-600">Délibération générée</span>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="copyOutput()" id="copyBtn"
+                class="text-xs bg-white border border-slate-200 hover:border-blue-300 hover:text-blue-700 text-slate-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                Copier
+              </button>
+              <button onclick="downloadOutput()"
+                class="text-xs bg-blue-900 hover:bg-blue-800 text-white px-3 py-1.5 rounded-lg transition-colors font-medium">
+                Télécharger .txt
+              </button>
+            </div>
+          </div>
+          <div class="p-6 max-h-[70vh] overflow-y-auto">
+            <div id="outputText" class="deliberation-output text-sm text-slate-800 leading-relaxed"></div>
+          </div>
+        </div>
+
+        <!-- Disclaimer -->
+        <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <p class="text-xs text-amber-800 leading-relaxed">
+            <span class="font-semibold">⚠️ Avertissement :</span> Ce document est généré automatiquement par intelligence artificielle à titre d'aide à la rédaction uniquement. Il ne constitue pas un acte administratif finalisé. Sa conformité juridique ne peut être garantie. L'utilisateur est seul responsable de la vérification, de la validation et de l'utilisation de ce document. Le développeur de cet outil décline toute responsabilité en cas d'erreur, d'omission ou de préjudice résultant de l'utilisation de ce contenu sans vérification préalable par un professionnel compétent.
+          </p>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div id="errorContainer" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-xl fade-in">
+        <p class="text-sm text-red-700 font-medium" id="errorText"></p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function toggleKey() {
+      const input = document.getElementById('apiKey');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    const examples = {
+      marche: {
+        commune: "Commune de Villeneuve-sur-Lot",
+        type: "Commune",
+        objet: "Autorisation de signer le marché de travaux de rénovation de la salle des fêtes",
+        contexte: "La salle des fêtes municipale date de 1978 et nécessite une rénovation complète : isolation thermique, mise aux normes électriques, accessibilité PMR. Un appel d'offres ouvert a été lancé. L'entreprise Bâticorp a été retenue comme mieux-disante.",
+        montant: "127 500 € HT"
+      },
+      budget: {
+        commune: "Communauté de communes des Berges du Rhône",
+        type: "Communauté de communes",
+        objet: "Vote du budget primitif 2026",
+        contexte: "Présentation et vote du budget primitif pour l'exercice 2026. Le budget principal s'équilibre en dépenses et recettes. Les orientations budgétaires ont été présentées lors du débat du 15 janvier 2026.",
+        montant: "2 350 000 €"
+      },
+      subvention: {
+        commune: "Commune de Bois-Colombes",
+        type: "Commune",
+        objet: "Attribution d'une subvention à l'association sportive Bois-Colombes Athletic Club",
+        contexte: "L'association BAC (loi 1901) organise des activités sportives pour les jeunes de la commune. Elle compte 380 adhérents dont 210 mineurs. La commune soutient ses activités depuis 2015.",
+        montant: "8 000 €"
+      },
+      convention: {
+        commune: "Syndicat intercommunal de gestion des déchets de la vallée de l'Arve",
+        type: "Syndicat intercommunal",
+        objet: "Approbation de la convention de mise à disposition de personnel avec la commune de Sallanches",
+        contexte: "La commune de Sallanches met à disposition du syndicat un agent technique catégorie B à temps partiel (50%) pour assurer les missions de suivi des collectes sur le secteur nord. Convention pour une durée de 2 ans renouvelable.",
+        montant: ""
+      },
+      tarif: {
+        commune: "Commune de Fontainebleau",
+        type: "Commune",
+        objet: "Fixation des tarifs municipaux des services périscolaires pour l'année scolaire 2026-2027",
+        contexte: "Révision annuelle des tarifs de la restauration scolaire, de l'accueil périscolaire matin et soir, et du centre de loisirs. Application du quotient familial en 4 tranches. Augmentation envisagée de 3% pour couvrir la hausse des coûts alimentaires.",
+        montant: ""
+      }
+    };
+
+    function fillExample(key) {
+      const ex = examples[key];
+      document.getElementById('commune').value = ex.commune;
+      document.getElementById('typeCollectivite').value = ex.type;
+      document.getElementById('objet').value = ex.objet;
+      document.getElementById('contexte').value = ex.contexte;
+      document.getElementById('montant').value = ex.montant;
+    }
+
+    async function generate() {
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const commune = document.getElementById('commune').value.trim();
+      const objet = document.getElementById('objet').value.trim();
+
+      if (!apiKey) { showError("Entrez votre clé API Anthropic."); return; }
+      if (!commune || !objet) { showError("Renseignez au minimum le nom de la collectivité et l'objet."); return; }
+
+      setLoading(true);
+      hideError();
+      hideOutput();
+
+      try {
+        const response = await fetch('/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: apiKey,
+            commune,
+            type_collectivite: document.getElementById('typeCollectivite').value,
+            date_seance: document.getElementById('dateSeance').value,
+            objet,
+            contexte: document.getElementById('contexte').value,
+            montant: document.getElementById('montant').value
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          showError(data.error);
+        } else {
+          showOutput(data.result);
+        }
+      } catch (e) {
+        showError("Erreur de connexion. Vérifiez que le serveur est bien lancé.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function setLoading(on) {
+      const btn = document.getElementById('generateBtn');
+      document.getElementById('btnText').classList.toggle('hidden', on);
+      document.getElementById('btnSpinner').classList.toggle('hidden', !on);
+      btn.disabled = on;
+      btn.classList.toggle('opacity-70', on);
+    }
+
+    function showOutput(text) {
+      document.getElementById('outputPlaceholder').classList.add('hidden');
+      document.getElementById('outputContainer').classList.remove('hidden');
+      document.getElementById('outputText').textContent = text;
+    }
+
+    function hideOutput() {
+      document.getElementById('outputContainer').classList.add('hidden');
+      document.getElementById('outputPlaceholder').classList.remove('hidden');
+    }
+
+    function showError(msg) {
+      document.getElementById('errorContainer').classList.remove('hidden');
+      document.getElementById('errorText').textContent = msg;
+    }
+
+    function hideError() {
+      document.getElementById('errorContainer').classList.add('hidden');
+    }
+
+    function copyOutput() {
+      const text = document.getElementById('outputText').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = '✓ Copié !';
+        btn.classList.add('text-green-700', 'border-green-300');
+        setTimeout(() => {
+          btn.textContent = 'Copier';
+          btn.classList.remove('text-green-700', 'border-green-300');
+        }, 2000);
+      });
+    }
+
+    function downloadOutput() {
+      const text = document.getElementById('outputText').textContent;
+      const objet = document.getElementById('objet').value || 'deliberation';
+      const filename = objet.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').substring(0, 40) + '.txt';
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+    }
+
+    // Set today's date by default
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('dateSeance').value = today;
+  </script>
+</body>
+</html>
