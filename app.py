@@ -42,9 +42,12 @@ Structure obligatoire d'une délibération :
    "Quorum atteint : OUI"
 
 3. VISAS (commencer chaque ligne par "VU")
-   - Code général des collectivités territoriales (articles pertinents)
-   - Autres textes législatifs ou réglementaires applicables
-   - Documents locaux si pertinents
+   IMPORTANT sur les visas : ne jamais inventer des numéros d'articles précis. Citer uniquement :
+   - Les codes et lois de manière générale ("Vu le Code général des collectivités territoriales")
+   - Les grandes divisions connues avec certitude ("notamment le Titre II du Livre II")
+   - Les documents locaux concrets fournis dans le contexte (délibérations antérieures, rapports, avis)
+   - Toujours terminer les visas par : "Vu les autres textes législatifs et réglementaires applicables en la matière ;"
+   - Ajouter en fin de section visas : "[Note : les références législatives précises sont à vérifier sur Légifrance avant présentation en conseil]"
 
 4. EXPOSÉ DES MOTIFS
    "Monsieur/Madame le Maire expose à l'assemblée que..."
