@@ -194,8 +194,12 @@
                 Copier
               </button>
               <button onclick="downloadOutput()"
+                class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                .txt
+              </button>
+              <button onclick="downloadDocx()"
                 class="text-xs bg-blue-900 hover:bg-blue-800 text-white px-3 py-1.5 rounded-lg transition-colors font-medium">
-                Télécharger .txt
+                ⬇ Word (.docx)
               </button>
             </div>
           </div>
@@ -412,6 +416,43 @@
       a.href = URL.createObjectURL(blob);
       a.download = filename;
       a.click();
+    }
+
+    async function downloadDocx() {
+      const text = document.getElementById('outputText').textContent;
+      if (!text) return;
+
+      const btn = event.target;
+      btn.textContent = '⏳ Génération...';
+      btn.disabled = true;
+
+      try {
+        const response = await fetch('/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text,
+            commune: document.getElementById('commune').value,
+            objet: document.getElementById('objet').value,
+            date_seance: document.getElementById('dateSeance').value
+          })
+        });
+
+        if (!response.ok) { throw new Error('Erreur export'); }
+
+        const blob = await response.blob();
+        const objet = document.getElementById('objet').value || 'deliberation';
+        const filename = objet.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').substring(0, 40) + '.docx';
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+      } catch(e) {
+        showError("Erreur lors de l'export Word.");
+      } finally {
+        btn.textContent = '⬇ Word (.docx)';
+        btn.disabled = false;
+      }
     }
 
     // Set today's date by default

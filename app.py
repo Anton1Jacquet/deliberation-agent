@@ -1,7 +1,12 @@
-from flask import Flask, request, jsonify, render_template_string, session
+from flask import Flask, request, jsonify, render_template_string, session, send_file
 import anthropic
 import os
+import io
+import re
 from collections import defaultdict
+from docx import Document
+from docx.shared import Pt, RGBColor, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "bos-deliberations-secret-2026")
@@ -156,6 +161,100 @@ Produis une délibération complète, formelle et juridiquement conforme, prête
         return jsonify({"error": "Limite de requêtes atteinte. Réessayez dans quelques secondes."}), 429
     except Exception as e:
         return jsonify({"error": f"Erreur inattendue : {str(e)}"}), 500
+
+
+def build_docx(text, commune, objet, date_seance):
+    doc = Document()
+
+    # Margins
+    for section in doc.sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1.2)
+        section.right_margin = Inches(1.2)
+
+    # Header — commune name
+    header = doc.add_paragraph(commune.upper() if commune else "COLLECTIVITÉ")
+    header.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = header.runs[0]
+    run.bold = True
+    run.font.size = Pt(14)
+    run.font.color.rgb = RGBColor(0x1e, 0x3a, 0x5f)
+
+    # Objet
+    if objet:
+        sub = doc.add_paragraph(f"Objet : {objet}")
+        sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        sub.runs[0].font.size = Pt(11)
+        sub.runs[0].italic = True
+
+    if date_seance:
+        d = doc.add_paragraph(f"Séance du {date_seance}")
+        d.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        d.runs[0].font.size = Pt(11)
+
+    doc.add_paragraph("")
+
+    # Body — parse lines
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            doc.add_paragraph("")
+            continue
+
+        p = doc.add_paragraph()
+
+        # Detect uppercase header lines (VU, CONSIDÉRANT, DECIDE, APPROUVE...)
+        is_header = (
+            stripped.isupper() or
+            stripped.startswith("VU ") or
+            stripped.startswith("CONSIDÉRANT") or
+            any(stripped.startswith(w) for w in ["DECIDE", "APPROUVE", "AUTORISE", "ACCEPTE", "DIT ", "PRÉCISE", "Pour extrait"])
+        )
+
+        run = p.add_run(stripped)
+        run.font.size = Pt(11)
+        if is_header:
+            run.bold = True
+
+    # Footer disclaimer
+    doc.add_paragraph("")
+    disclaimer = doc.add_paragraph(
+        "⚠️ Ce document est un brouillon généré par ActIA (intelligence artificielle). "
+        "Il doit être relu et validé par un professionnel compétent avant toute utilisation officielle. "
+        "Les références législatives sont à vérifier sur Légifrance."
+    )
+    disclaimer.runs[0].font.size = Pt(9)
+    disclaimer.runs[0].italic = True
+    disclaimer.runs[0].font.color.rgb = RGBColor(0x92, 0x40, 0x0e)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf
+
+
+@app.route("/export", methods=["POST"])
+def export_docx():
+    data = request.json
+    text = data.get("text", "")
+    commune = data.get("commune", "")
+    objet = data.get("objet", "")
+    date_seance = data.get("date_seance", "")
+
+    if not text:
+        return jsonify({"error": "Aucun contenu à exporter"}), 400
+
+    buf = build_docx(text, commune, objet, date_seance)
+    filename = re.sub(r"[^a-z0-9-]", "", objet.lower().replace(" ", "-"))[:40] or "deliberation"
+    filename += ".docx"
+
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        as_attachment=True,
+        download_name=filename
+    )
 
 
 if __name__ == "__main__":
