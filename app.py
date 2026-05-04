@@ -163,7 +163,7 @@ if __name__ == "__main__":
     debug = os.environ.get("FLASK_ENV") == "development"
     if not debug:
         print("")
-        print("  ⚖️  Agent Délibérations IA")
+        print("  ⚖️  ActIA — Actes administratifs par IA")
         print("  ─────────────────────────────")
         print(f"  Ouvre ton navigateur sur :")
         print(f"  → http://localhost:{port}")
