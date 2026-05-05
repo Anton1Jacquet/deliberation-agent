@@ -13,6 +13,9 @@ app.secret_key = os.environ.get("SECRET_KEY", "bos-deliberations-secret-2026")
 
 FREE_LIMIT = 5
 usage_by_ip = defaultdict(int)
+VALID_CODES = set(
+    c.strip() for c in os.environ.get("ACCESS_CODES", "").split(",") if c.strip()
+)
 
 SYSTEM_PROMPT = """Tu es un juriste expert en droit public des collectivités territoriales françaises, spécialisé dans la rédaction d'actes administratifs.
 
@@ -101,19 +104,32 @@ def get_usage():
     })
 
 
+@app.route("/validate-code", methods=["POST"])
+def validate_code():
+    code = request.json.get("code", "").strip()
+    valid = bool(VALID_CODES) and code in VALID_CODES
+    return jsonify({"valid": valid})
+
+
 @app.route("/generate", methods=["POST"])
 def generate():
     data = request.json
     user_api_key = data.get("api_key", "").strip()
+    access_code = data.get("access_code", "").strip()
     ip = get_client_ip()
     server_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    has_valid_code = bool(VALID_CODES) and access_code in VALID_CODES
 
     if user_api_key:
         api_key = user_api_key
+    elif has_valid_code:
+        if not server_key:
+            return jsonify({"error": "Clé API serveur non configurée. Contactez le support."}), 500
+        api_key = server_key
     elif server_key:
         if usage_by_ip[ip] >= FREE_LIMIT:
             return jsonify({
-                "error": f"Vous avez utilisé vos {FREE_LIMIT} générations gratuites. Entrez votre propre clé API Anthropic pour continuer (gratuit sur console.anthropic.com)."
+                "error": f"Vous avez utilisé vos {FREE_LIMIT} générations gratuites. Entrez votre code d'accès abonné ou votre propre clé API Anthropic pour continuer."
             }), 429
         api_key = server_key
         usage_by_ip[ip] += 1
@@ -149,7 +165,10 @@ Produis une délibération complète, formelle et juridiquement conforme, prête
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        remaining = max(0, FREE_LIMIT - usage_by_ip[ip]) if not user_api_key else None
+        if user_api_key or has_valid_code:
+            remaining = None
+        else:
+            remaining = max(0, FREE_LIMIT - usage_by_ip[ip])
         return jsonify({
             "result": message.content[0].text,
             "remaining": remaining

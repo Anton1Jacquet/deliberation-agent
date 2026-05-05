@@ -50,6 +50,16 @@
       <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-5">Paramètres de la délibération</h2>
 
+        <!-- Subscriber badge -->
+        <div id="subscriberBadge" class="mb-5 p-4 bg-blue-50 rounded-xl border border-blue-200 hidden">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-semibold text-blue-900">✦ Accès abonné</span>
+            <span class="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded-full font-bold">Illimité</span>
+          </div>
+          <p class="text-xs text-blue-700 mt-1">Générations illimitées incluses dans votre abonnement.</p>
+          <button onclick="clearAccessCode()" class="text-xs text-blue-400 hover:text-blue-600 mt-1.5 underline">Changer de code</button>
+        </div>
+
         <!-- Free usage counter -->
         <div id="freeCounter" class="mb-5 p-4 bg-green-50 rounded-xl border border-green-200 hidden">
           <div class="flex items-center justify-between">
@@ -57,11 +67,31 @@
             <span id="remainingBadge" class="text-xs bg-green-200 text-green-800 px-2 py-1 rounded-full font-bold"></span>
           </div>
           <p class="text-xs text-green-700 mt-1">Aucune inscription requise. Testez librement.</p>
+          <button onclick="toggleAccessCodeInput()" class="text-xs text-green-600 hover:text-green-800 mt-1.5 underline">J'ai un code d'accès abonné</button>
+        </div>
+
+        <!-- Access code input -->
+        <div id="accessCodeSection" class="mb-5 p-4 bg-blue-50 rounded-xl border border-blue-200 hidden">
+          <label class="block text-xs font-semibold text-blue-800 mb-1.5">Code d'accès abonné</label>
+          <div class="flex gap-2">
+            <input id="accessCodeInput" type="text" placeholder="ACTIA-XXXXXX"
+              class="flex-1 text-sm border border-blue-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 uppercase"
+              onkeydown="if(event.key==='Enter') validateAccessCode()"/>
+            <button onclick="validateAccessCode()"
+              class="text-xs bg-blue-900 hover:bg-blue-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors">
+              Valider
+            </button>
+          </div>
+          <p id="accessCodeError" class="text-xs text-red-600 mt-1.5 hidden">Code invalide. Vérifiez et réessayez.</p>
         </div>
 
         <!-- API Key (shown only when free limit reached) -->
         <div id="apiKeySection" class="mb-5 p-4 bg-amber-50 rounded-xl border border-amber-200 hidden">
-          <label class="block text-xs font-semibold text-amber-800 mb-1.5">⚠️ Limite gratuite atteinte — Entrez votre clé API</label>
+          <label class="block text-xs font-semibold text-amber-800 mb-1.5">⚠️ Limite gratuite atteinte</label>
+          <button onclick="toggleAccessCodeInput()" class="w-full mb-3 text-xs bg-blue-900 hover:bg-blue-800 text-white py-2 rounded-lg font-semibold transition-colors">
+            Entrer mon code d'accès abonné
+          </button>
+          <p class="text-xs text-amber-700 font-medium mb-1.5">Ou entrez votre propre clé API Anthropic :</p>
           <div class="relative">
             <input id="apiKey" type="password" placeholder="sk-ant-..."
               class="w-full text-sm border border-amber-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 pr-10"/>
@@ -226,6 +256,7 @@
   <script>
     let serverKeyAvailable = false;
     let remainingFree = 0;
+    let activeAccessCode = localStorage.getItem('actia_access_code') || '';
 
     async function checkUsage() {
       try {
@@ -238,23 +269,60 @@
     }
 
     function updateUI() {
-      if (serverKeyAvailable && remainingFree > 0) {
+      const ids = ['subscriberBadge', 'freeCounter', 'accessCodeSection', 'apiKeySection', 'apiKeyFallback'];
+      ids.forEach(id => document.getElementById(id).classList.add('hidden'));
+
+      if (activeAccessCode) {
+        document.getElementById('subscriberBadge').classList.remove('hidden');
+      } else if (serverKeyAvailable && remainingFree > 0) {
         document.getElementById('freeCounter').classList.remove('hidden');
-        document.getElementById('apiKeySection').classList.add('hidden');
-        document.getElementById('apiKeyFallback').classList.add('hidden');
         document.getElementById('remainingBadge').textContent = `${remainingFree} génération${remainingFree > 1 ? 's' : ''} gratuite${remainingFree > 1 ? 's' : ''} restante${remainingFree > 1 ? 's' : ''}`;
       } else if (serverKeyAvailable && remainingFree === 0) {
-        document.getElementById('freeCounter').classList.add('hidden');
         document.getElementById('apiKeySection').classList.remove('hidden');
-        document.getElementById('apiKeyFallback').classList.add('hidden');
       } else {
-        document.getElementById('freeCounter').classList.add('hidden');
-        document.getElementById('apiKeySection').classList.add('hidden');
         document.getElementById('apiKeyFallback').classList.remove('hidden');
       }
     }
 
+    function toggleAccessCodeInput() {
+      const section = document.getElementById('accessCodeSection');
+      section.classList.toggle('hidden');
+      if (!section.classList.contains('hidden')) {
+        document.getElementById('accessCodeInput').focus();
+      }
+    }
+
+    async function validateAccessCode() {
+      const code = document.getElementById('accessCodeInput').value.trim().toUpperCase();
+      if (!code) return;
+      try {
+        const res = await fetch('/validate-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        const data = await res.json();
+        if (data.valid) {
+          activeAccessCode = code;
+          localStorage.setItem('actia_access_code', code);
+          document.getElementById('accessCodeError').classList.add('hidden');
+          updateUI();
+        } else {
+          document.getElementById('accessCodeError').classList.remove('hidden');
+        }
+      } catch(e) {
+        document.getElementById('accessCodeError').classList.remove('hidden');
+      }
+    }
+
+    function clearAccessCode() {
+      activeAccessCode = '';
+      localStorage.removeItem('actia_access_code');
+      updateUI();
+    }
+
     function getApiKey() {
+      if (activeAccessCode) return '';
       if (serverKeyAvailable && remainingFree > 0) return '';
       const k1 = document.getElementById('apiKey');
       if (k1 && !k1.closest('#apiKeySection').classList.contains('hidden')) return k1.value.trim();
@@ -335,6 +403,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             api_key: apiKey,
+            access_code: activeAccessCode,
             commune,
             type_collectivite: document.getElementById('typeCollectivite').value,
             date_seance: document.getElementById('dateSeance').value,
@@ -348,7 +417,7 @@
 
         if (data.error) {
           showError(data.error);
-          if (data.error.includes('gratuites')) {
+          if (data.error.includes('gratuites') || data.error.includes('Limite')) {
             remainingFree = 0;
             updateUI();
           }
