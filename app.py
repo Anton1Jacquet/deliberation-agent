@@ -102,6 +102,11 @@ def index():
     return render_template_string(HTML_TEMPLATE)
 
 
+@app.route("/actia-logo.png")
+def logo():
+    return send_file(os.path.join(os.path.dirname(__file__), "actia-logo.png"), mimetype="image/png")
+
+
 @app.route("/usage", methods=["GET"])
 def get_usage():
     ip = get_client_ip()
