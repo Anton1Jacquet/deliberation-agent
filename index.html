@@ -344,6 +344,7 @@
     let serverKeyAvailable = false;
     let remainingFree = 0;
     let activeAccessCode = localStorage.getItem('actia_access_code') || '';
+    let currentHistoryId = null;
 
     async function checkUsage() {
       try {
@@ -646,8 +647,6 @@
       btn.disabled = on;
       btn.classList.toggle('opacity-70', on);
     }
-
-    let currentHistoryId = null;
 
     function showOutput(text, skipSave) {
       document.getElementById('outputPlaceholder').classList.add('hidden');
