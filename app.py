@@ -114,6 +114,75 @@ def get_usage():
     })
 
 
+CHECKLIST_SYSTEM = """Tu es un expert en droit public des collectivités territoriales françaises.
+À partir d'une délibération fournie, tu génères une checklist de vérification pratique pour le secrétaire de mairie ou l'agent en charge.
+
+Format de réponse STRICT — deux sections séparées par "---" :
+
+SECTION 1 : Points généraux (toujours présents)
+Liste de 4 à 6 points à vérifier pour toute délibération : convocation, quorum, dates, visas, signatures, transmission au contrôle de légalité, etc.
+
+SECTION 2 : Points spécifiques
+Liste de 4 à 8 points propres au TYPE de délibération fournie. Sois précis et concret : délais réglementaires, obligations de publicité, pièces justificatives, validations préalables, etc.
+
+Chaque point doit être une phrase courte et actionnable, commençant par un verbe à l'infinitif.
+Ne mets pas d'astérisques, pas de markdown. Juste le texte brut avec les listes."""
+
+
+@app.route("/checklist", methods=["POST"])
+def generate_checklist():
+    data = request.json
+    user_api_key = data.get("api_key", "").strip()
+    access_code = data.get("access_code", "").strip()
+    deliberation_text = data.get("deliberation_text", "")
+    objet = data.get("objet", "")
+    type_collectivite = data.get("type_collectivite", "Commune")
+    server_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    has_valid_code = bool(VALID_CODES) and access_code.upper() in VALID_CODES
+
+    if user_api_key:
+        api_key = user_api_key
+    elif has_valid_code or server_key:
+        api_key = server_key
+        if not api_key:
+            return jsonify({"error": "Clé API non configurée."}), 500
+    else:
+        return jsonify({"error": "Clé API manquante."}), 400
+
+    if not deliberation_text:
+        return jsonify({"error": "Aucune délibération fournie."}), 400
+
+    prompt = f"""Voici une délibération de type "{objet}" pour une {type_collectivite}.
+
+{deliberation_text[:3000]}
+
+Génère la checklist de vérification selon le format demandé."""
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model="claude-haiku-4-5",
+            max_tokens=800,
+            system=CHECKLIST_SYSTEM,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text.strip()
+        parts = raw.split("---")
+        generique = parts[0].strip() if len(parts) > 0 else ""
+        specifique = parts[1].strip() if len(parts) > 1 else ""
+
+        def parse_items(text):
+            lines = [l.strip().lstrip("-•·") .strip() for l in text.split("\n") if l.strip()]
+            return [l for l in lines if len(l) > 10 and not l.isupper()]
+
+        return jsonify({
+            "generique": parse_items(generique),
+            "specifique": parse_items(specifique)
+        })
+    except Exception as e:
+        return jsonify({"error": f"Erreur checklist : {str(e)}"}), 500
+
+
 @app.route("/validate-code", methods=["POST"])
 def validate_code():
     code = request.json.get("code", "").strip().upper()

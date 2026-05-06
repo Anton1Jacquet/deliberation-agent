@@ -244,6 +244,28 @@
             <span class="font-semibold">⚠️ Avertissement :</span> Ce document est généré automatiquement par intelligence artificielle à titre d'aide à la rédaction uniquement. Il ne constitue pas un acte administratif finalisé. Sa conformité juridique ne peut être garantie. L'utilisateur est seul responsable de la vérification, de la validation et de l'utilisation de ce document. Le développeur de cet outil décline toute responsabilité en cas d'erreur, d'omission ou de préjudice résultant de l'utilisation de ce contenu sans vérification préalable par un professionnel compétent.
           </p>
         </div>
+
+        <!-- Checklist -->
+        <div id="checklistContainer" class="mt-4 hidden fade-in">
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-slate-700">✅ Checklist de vérification</span>
+              </div>
+              <span id="checklistProgress" class="text-xs text-slate-500 font-medium"></span>
+            </div>
+            <div class="p-5 space-y-5">
+              <div id="checklistGenerique"></div>
+              <div id="checklistSpecifique"></div>
+            </div>
+          </div>
+        </div>
+        <div id="checklistLoading" class="mt-4 hidden">
+          <div class="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
+            <span class="spinner"></span>
+            <span class="text-xs text-slate-500">Génération de la checklist de vérification...</span>
+          </div>
+        </div>
       </div>
 
       <!-- Error -->
@@ -447,11 +469,80 @@
       document.getElementById('outputPlaceholder').classList.add('hidden');
       document.getElementById('outputContainer').classList.remove('hidden');
       document.getElementById('outputText').textContent = text;
+      document.getElementById('checklistContainer').classList.add('hidden');
+      document.getElementById('checklistLoading').classList.remove('hidden');
+      loadChecklist(text);
     }
 
     function hideOutput() {
       document.getElementById('outputContainer').classList.add('hidden');
       document.getElementById('outputPlaceholder').classList.remove('hidden');
+      document.getElementById('checklistContainer').classList.add('hidden');
+      document.getElementById('checklistLoading').classList.add('hidden');
+    }
+
+    async function loadChecklist(deliberationText) {
+      try {
+        const res = await fetch('/checklist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: getApiKey(),
+            access_code: activeAccessCode,
+            deliberation_text: deliberationText,
+            objet: document.getElementById('objet').value,
+            type_collectivite: document.getElementById('typeCollectivite').value
+          })
+        });
+        const data = await res.json();
+        document.getElementById('checklistLoading').classList.add('hidden');
+        if (data.error) return;
+        renderChecklist(data.generique || [], data.specifique || []);
+        document.getElementById('checklistContainer').classList.remove('hidden');
+      } catch(e) {
+        document.getElementById('checklistLoading').classList.add('hidden');
+      }
+    }
+
+    let checklistTotal = 0;
+    let checklistDone = 0;
+
+    function renderChecklist(generique, specifique) {
+      checklistTotal = generique.length + specifique.length;
+      checklistDone = 0;
+      updateChecklistProgress();
+
+      document.getElementById('checklistGenerique').innerHTML = renderSection('Points généraux', generique, 'gen');
+      document.getElementById('checklistSpecifique').innerHTML = renderSection('Points spécifiques à cette délibération', specifique, 'spec');
+    }
+
+    function renderSection(title, items, prefix) {
+      if (!items.length) return '';
+      const rows = items.map((item, i) => `
+        <label class="flex items-start gap-3 cursor-pointer group py-1.5">
+          <input type="checkbox" onchange="onChecklistChange()" class="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 flex-shrink-0" />
+          <span class="text-sm text-slate-700 group-has-[:checked]:line-through group-has-[:checked]:text-slate-400 transition-all">${item}</span>
+        </label>`).join('');
+      return `<div>
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">${title}</p>
+        <div class="space-y-0.5">${rows}</div>
+      </div>`;
+    }
+
+    function onChecklistChange() {
+      const all = document.querySelectorAll('#checklistContainer input[type=checkbox]');
+      checklistDone = [...all].filter(c => c.checked).length;
+      checklistTotal = all.length;
+      updateChecklistProgress();
+    }
+
+    function updateChecklistProgress() {
+      const el = document.getElementById('checklistProgress');
+      if (!el || checklistTotal === 0) return;
+      el.textContent = `${checklistDone}/${checklistTotal} vérifiés`;
+      el.className = checklistDone === checklistTotal
+        ? 'text-xs text-green-600 font-semibold'
+        : 'text-xs text-slate-500 font-medium';
     }
 
     function showError(msg) {
