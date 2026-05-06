@@ -14,7 +14,9 @@ app.secret_key = os.environ.get("SECRET_KEY", "bos-deliberations-secret-2026")
 FREE_LIMIT = 5
 usage_by_ip = defaultdict(int)
 VALID_CODES = set(
-    c.strip() for c in os.environ.get("ACCESS_CODES", "").split(",") if c.strip()
+    c.strip().strip('"').strip("'").upper()
+    for c in os.environ.get("ACCESS_CODES", "").split(",")
+    if c.strip().strip('"').strip("'")
 )
 
 SYSTEM_PROMPT = """Tu es un juriste expert en droit public des collectivités territoriales françaises, spécialisé dans la rédaction d'actes administratifs.
@@ -104,11 +106,20 @@ def get_usage():
     })
 
 
+@app.route("/debug-env")
+def debug_env():
+    return jsonify({
+        "access_codes_raw": os.environ.get("ACCESS_CODES", "NOT_SET"),
+        "codes_loaded": len(VALID_CODES),
+        "valid_codes_preview": list(VALID_CODES)[:3]
+    })
+
+
 @app.route("/validate-code", methods=["POST"])
 def validate_code():
-    code = request.json.get("code", "").strip()
+    code = request.json.get("code", "").strip().upper()
     valid = bool(VALID_CODES) and code in VALID_CODES
-    return jsonify({"valid": valid})
+    return jsonify({"valid": valid, "codes_loaded": len(VALID_CODES)})
 
 
 @app.route("/generate", methods=["POST"])
@@ -118,7 +129,7 @@ def generate():
     access_code = data.get("access_code", "").strip()
     ip = get_client_ip()
     server_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    has_valid_code = bool(VALID_CODES) and access_code in VALID_CODES
+    has_valid_code = bool(VALID_CODES) and access_code.upper() in VALID_CODES
 
     if user_api_key:
         api_key = user_api_key
