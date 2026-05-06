@@ -11,6 +11,14 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "bos-deliberations-secret-2026")
 
+
+def clean_markdown(text):
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text, flags=re.DOTALL)
+    text = re.sub(r'\*([^\*\n]+)\*', r'\1', text)
+    text = re.sub(r'(?m)^\*\s+', '', text)
+    text = re.sub(r'(?m)^#+\s+', '', text)
+    return text
+
 FREE_LIMIT = 5
 usage_by_ip = defaultdict(int)
 VALID_CODES = set(
@@ -172,7 +180,7 @@ Produis une délibération complète, formelle et juridiquement conforme, prête
         else:
             remaining = max(0, FREE_LIMIT - usage_by_ip[ip])
         return jsonify({
-            "result": message.content[0].text,
+            "result": clean_markdown(message.content[0].text),
             "remaining": remaining
         })
 
