@@ -106,15 +106,6 @@ def get_usage():
     })
 
 
-@app.route("/debug-env")
-def debug_env():
-    return jsonify({
-        "access_codes_raw": os.environ.get("ACCESS_CODES", "NOT_SET"),
-        "codes_loaded": len(VALID_CODES),
-        "valid_codes_preview": list(VALID_CODES)[:3]
-    })
-
-
 @app.route("/validate-code", methods=["POST"])
 def validate_code():
     code = request.json.get("code", "").strip().upper()
